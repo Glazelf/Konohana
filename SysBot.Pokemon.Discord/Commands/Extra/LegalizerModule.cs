@@ -5,7 +5,7 @@ namespace SysBot.Pokemon.Discord
 {
     public class LegalizerModule : ModuleBase<SocketCommandContext>
     {
-        [Command("legalize"), Alias("alm")]
+        [Command("legalize"), Alias("liberate")]
         [Summary("Tries to legalize the attached pkm data.")]
         public async Task LegalizeAsync()
         {
