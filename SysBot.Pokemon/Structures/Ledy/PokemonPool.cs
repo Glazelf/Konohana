@@ -92,6 +92,12 @@ namespace SysBot.Pokemon
                     continue;
                 }
 
+                if (DisallowSurpriseTrade(pk8, la.EncounterMatch))
+                {
+                    LogUtil.LogInfo("Provided pk8 was loaded but can't be Surprise Traded: " + dest.FileName, nameof(PokemonPool<T>));
+                    surpriseBlocked++;
+                }
+
                 if (Settings.Legality.ResetHOMETracker)
                     pk8.Tracker = 0;
 
@@ -126,7 +132,7 @@ namespace SysBot.Pokemon
 
         private static bool DisallowSurpriseTrade(PKM pk, IEncounterable enc)
         {
-            return false;
+            return DisallowSurpriseTrade(pk);
         }
 
         private static bool DisallowSurpriseTrade(PKM pk)
