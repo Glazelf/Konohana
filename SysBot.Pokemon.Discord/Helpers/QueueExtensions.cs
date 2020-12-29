@@ -40,19 +40,6 @@ namespace SysBot.Pokemon.Discord
             await Context.Channel.SendMessageAsync(msg).ConfigureAwait(false);
             // Notify in PM to mirror what is said in the channel.
             await trader.SendMessageAsync(msg).ConfigureAwait(false);
-
-            // Clean Up
-            if (result)
-            {
-                // Delete the user's join message for privacy
-                if (!Context.IsPrivate)
-                    await Context.Message.DeleteAsync(RequestOptions.Default).ConfigureAwait(false);
-            }
-            else
-            {
-                // Delete our "I'm adding you!", and send the same message that we sent to the general channel.
-                await test.DeleteAsync().ConfigureAwait(false);
-            }
         }
 
         public static async Task AddToQueueAsync(this SocketCommandContext Context, int code, string trainer, RequestSignificance sig, PK8 trade, PokeRoutineType routine, PokeTradeType type)
