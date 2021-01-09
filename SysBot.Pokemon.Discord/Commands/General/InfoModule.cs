@@ -17,7 +17,7 @@ namespace SysBot.Pokemon.Discord
     public class InfoModule : ModuleBase<SocketCommandContext>
     {
         private const string detail = "I am an open source Discord bot powered by PKHeX.Core and other open source software.";
-        private const string repo = "https://github.com/kwsch/SysBot.NET";
+        private const string repo = "https://github.com/Glazelf/Konohana";
 
         [Command("info")]
         [Alias("about", "whoami", "owner")]
@@ -36,8 +36,7 @@ namespace SysBot.Pokemon.Discord
                 $"- {Format.Bold("Owner")}: {app.Owner} ({app.Owner.Id})\n" +
                 $"- {Format.Bold("Library")}: Discord.Net ({DiscordConfig.Version})\n" +
                 $"- {Format.Bold("Uptime")}: {GetUptime()}\n" +
-                $"- {Format.Bold("Runtime")}: {RuntimeInformation.FrameworkDescription} {RuntimeInformation.ProcessArchitecture} " +
-                $"({RuntimeInformation.OSDescription} {RuntimeInformation.OSArchitecture})\n" +
+                $"- {Format.Bold("Runtime")}: {RuntimeInformation.FrameworkDescription} {RuntimeInformation.ProcessArchitecture}\n" +
                 $"- {Format.Bold("Buildtime")}: {GetBuildTime()}\n" +
                 $"- {Format.Bold("Core")}: {GetCoreDate()}\n" +
                 $"- {Format.Bold("AutoLegality")}: {GetALMDate()}\n"
