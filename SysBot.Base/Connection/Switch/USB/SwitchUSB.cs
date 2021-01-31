@@ -28,7 +28,10 @@ namespace SysBot.Base
         private UsbDevice? SwDevice;
         private UsbEndpointReader? reader;
         private UsbEndpointWriter? writer;
-        protected const int MaximumTransferSize = 468;
+
+        public int MaximumTransferSize { get; set; } = 0x1C0;
+        public int BaseDelay { get; set; } = 1;
+        public int DelayFactor { get; set; } = 1000;
 
         private readonly object _sync = new();
         private static readonly object _registry = new();
@@ -195,14 +198,21 @@ namespace SysBot.Base
         {
             int byteCount = data.Length;
             for (int i = 0; i < byteCount; i += MaximumTransferSize)
-                Write(data.SliceSafe(i, MaximumTransferSize), offset + (uint)i, method);
+            {
+                var slice = data.SliceSafe(i, MaximumTransferSize);
+                Write(slice, offset + (uint)i, method);
+                Thread.Sleep(MaximumTransferSize / DelayFactor + BaseDelay);
+            }
         }
 
         private byte[] ReadLarge(uint offset, int length, Func<ulong, int, byte[]> method)
         {
             var result = new byte[length];
             for (int i = 0; i < length; i += MaximumTransferSize)
+            {
                 Read(offset + (uint)i, Math.Min(MaximumTransferSize, length - i), method).CopyTo(result, i);
+                Thread.Sleep(MaximumTransferSize / DelayFactor + BaseDelay);
+            }
             return result;
         }
 
