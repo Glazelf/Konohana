@@ -178,10 +178,9 @@ namespace SysBot.Pokemon
                 await Click(A, 1_500, token).ConfigureAwait(false);
 
             // Loading Screen
-            await Task.Delay(1_000, token).ConfigureAwait(false);
             if (poke.Type != PokeTradeType.Random)
                 Hub.Config.Stream.StartEnterCode(this);
-            await Task.Delay(1_000, token).ConfigureAwait(false);
+            await Task.Delay(Hub.Config.Timings.ExtraTimeOpenCodeEntry, token).ConfigureAwait(false);
 
             var code = poke.Code;
             Log($"Entering Link Trade Code: {code:0000 0000}...");
@@ -253,7 +252,10 @@ namespace SysBot.Pokemon
             var oldEC = await Connection.ReadBytesAsync(LinkTradePartnerPokemonOffset, 4, token).ConfigureAwait(false);
             if (pk == null)
             {
-                await ExitTrade(Hub.Config, true, token).ConfigureAwait(false);
+                if (poke.Type == PokeTradeType.Seed)
+                    await ExitSeedCheckTrade(Hub.Config, token).ConfigureAwait(false);
+                else
+                    await ExitTrade(Hub.Config, true, token).ConfigureAwait(false);
                 return PokeTradeResult.TrainerTooSlow;
             }
 
