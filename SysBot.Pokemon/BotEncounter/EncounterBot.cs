@@ -13,7 +13,8 @@ namespace SysBot.Pokemon
         private readonly PokeTradeHub<PK8> Hub;
         private readonly BotCompleteCounts Counts;
         private readonly IDumper DumpSetting;
-        private readonly int[] DesiredIVs;
+        private readonly int[] DesiredMinIVs;
+        private readonly int[] DesiredMaxIVs;
         private readonly byte[] BattleMenuReady = { 0, 0, 0, 255 };
 
         public EncounterBot(PokeBotState cfg, PokeTradeHub<PK8> hub) : base(cfg)
@@ -21,7 +22,7 @@ namespace SysBot.Pokemon
             Hub = hub;
             Counts = Hub.Counts;
             DumpSetting = Hub.Config.Folder;
-            DesiredIVs = StopConditionSettings.InitializeTargetIVs(Hub);
+            StopConditionSettings.InitializeTargetIVs(Hub, out DesiredMinIVs, out DesiredMaxIVs);
         }
 
         private int encounterCount;
@@ -70,8 +71,7 @@ namespace SysBot.Pokemon
                     Log("Invalid data detected. Restarting loop.");
 
                     // Flee and continue looping.
-                    while (await IsInBattle(token).ConfigureAwait(false))
-                        await FleeToOverworld(token).ConfigureAwait(false);
+                    await FleeToOverworld(token).ConfigureAwait(false);
                     continue;
                 }
 
@@ -83,8 +83,7 @@ namespace SysBot.Pokemon
                     return;
 
                 Log("Running away...");
-                while (await IsInBattle(token).ConfigureAwait(false))
-                    await FleeToOverworld(token).ConfigureAwait(false);
+                await FleeToOverworld(token).ConfigureAwait(false);
             }
         }
 
@@ -115,7 +114,7 @@ namespace SysBot.Pokemon
                 Log("Looking for a new dog...");
 
                 // At the start of each loop, an A press is needed to exit out of a prompt.
-                await Click(A, 0_200, token).ConfigureAwait(false);
+                await Click(A, 0_100, token).ConfigureAwait(false);
                 await SetStick(LEFT, 0, 30000, 1_000, token).ConfigureAwait(false);
 
                 // Encounters Zacian/Zamazenta and clicks through all the menus.
@@ -144,8 +143,7 @@ namespace SysBot.Pokemon
                     return;
 
                 Log("Running away...");
-                while (await IsInBattle(token).ConfigureAwait(false))
-                    await FleeToOverworld(token).ConfigureAwait(false);
+                await FleeToOverworld(token).ConfigureAwait(false);
 
                 // Extra delay to be sure we're fully out of the battle.
                 await Task.Delay(0_250, token).ConfigureAwait(false);
@@ -210,7 +208,7 @@ namespace SysBot.Pokemon
             if (DumpSetting.Dump && !string.IsNullOrEmpty(DumpSetting.DumpFolder))
                 DumpPokemon(DumpSetting.DumpFolder, legends ? "legends" : "encounters", pk);
 
-            if (StopConditionSettings.EncounterFound(pk, DesiredIVs, Hub.Config.StopConditions))
+            if (StopConditionSettings.EncounterFound(pk, DesiredMinIVs, DesiredMaxIVs, Hub.Config.StopConditions))
             {
                 Log("Result found! Stopping routine execution; restart the bot(s) to search again.");
                 if (Hub.Config.StopConditions.CaptureVideoClip)
@@ -233,10 +231,16 @@ namespace SysBot.Pokemon
         private async Task FleeToOverworld(CancellationToken token)
         {
             // This routine will always escape a battle.
-            await Click(DUP, 0_400, token).ConfigureAwait(false);
-            await Click(A, 0_400, token).ConfigureAwait(false);
-            await Click(B, 0_400, token).ConfigureAwait(false);
-            await Click(B, 0_400, token).ConfigureAwait(false);
+            await Click(DUP, 0_200, token).ConfigureAwait(false);
+            await Click(A, 1_000, token).ConfigureAwait(false);
+
+            while (await IsInBattle(token).ConfigureAwait(false))
+            {
+                await Click(B, 0_500, token).ConfigureAwait(false);
+                await Click(B, 1_000, token).ConfigureAwait(false);
+                await Click(DUP, 0_200, token).ConfigureAwait(false);
+                await Click(A, 1_000, token).ConfigureAwait(false);
+            }
         }
     }
 }
