@@ -76,7 +76,7 @@ namespace SysBot.Pokemon.Discord
 
             var pokeName = "";
             if (t == PokeTradeType.Specific && pk8.Species != 0)
-                pokeName = $" Receiving: {(Species)pk8.Species}.";
+                // pokeName = $" Receiving: {(Species)pk8.Species}.";
             msg = $"{user.Mention} - Added to the {type} queue{ticketID}. Current Position: {position.Position}.";
 
             var botct = Info.Hub.Bots.Count;
