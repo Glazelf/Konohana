@@ -64,7 +64,7 @@ namespace SysBot.Pokemon
             {
                 var fallback = GetFallbackBlank(i);
                 var exist = TrainerSettings.GetSavedTrainerData(i, fallback);
-                if (exist == fallback)
+                if (ReferenceEquals(exist, fallback))
                     TrainerSettings.Register(fallback);
             }
 
@@ -74,7 +74,7 @@ namespace SysBot.Pokemon
 
         private static void InitializeCoreStrings()
         {
-            var lang = Thread.CurrentThread.CurrentCulture.TwoLetterISOLanguageName.Substring(0, 2);
+            var lang = Thread.CurrentThread.CurrentCulture.TwoLetterISOLanguageName[..2];
             LocalizationUtil.SetLocalization(typeof(LegalityCheckStrings), lang);
             LocalizationUtil.SetLocalization(typeof(MessageStrings), lang);
             RibbonStrings.ResetDictionary(GameInfo.Strings.ribbons);
@@ -83,6 +83,8 @@ namespace SysBot.Pokemon
 
         public static bool CanBeTraded(this PKM pkm)
         {
+            if ((pkm.IsNicknamed && StringsUtil.IsSpammyString(pkm.Nickname)) || StringsUtil.IsSpammyString(pkm.OT_Name))
+                return false;
             return !FormInfo.IsFusedForm(pkm.Species, pkm.Form, pkm.Format);
         }
 

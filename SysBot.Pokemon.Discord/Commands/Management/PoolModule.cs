@@ -7,17 +7,17 @@ using System.Threading.Tasks;
 namespace SysBot.Pokemon.Discord
 {
     [Summary("Distribution Pool Module")]
-    public class PoolModule : ModuleBase<SocketCommandContext>
+    public class PoolModule<T> : ModuleBase<SocketCommandContext> where T : PKM, new()
     {
         [Command("poolReload")]
         [Summary("Reloads the bot pool from the setting's folder.")]
         [RequireSudo]
         public async Task ReloadPoolAsync()
         {
-            var me = SysCordInstance.Self;
+            var me = SysCord<T>.Runner;
             var hub = me.Hub;
 
-            var pool = hub.Ledy.Pool.Reload();
+            var pool = hub.Ledy.Pool.Reload(hub.Config.Folder.DistributeFolder);
             if (!pool)
                 await ReplyAsync("Failed to reload from folder.").ConfigureAwait(false);
             else
@@ -28,11 +28,11 @@ namespace SysBot.Pokemon.Discord
         [Summary("Displays the details of Pokémon files in the random pool.")]
         public async Task DisplayPoolCountAsync()
         {
-            var me = SysCordInstance.Self;
+            var me = SysCord<T>.Runner;
             var hub = me.Hub;
             var pool = hub.Ledy.Pool;
             var count = pool.Count;
-            if (count > 0 && count < 20)
+            if (count is > 0 and < 20)
             {
                 var lines = pool.Files.Select((z, i) => $"{i + 1:00}: {z.Key} = {(Species)z.Value.RequestInfo.Species}");
                 var msg = string.Join("\n", lines);

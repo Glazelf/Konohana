@@ -20,6 +20,9 @@ namespace SysBot.Pokemon
         [Category(FeatureToggle), Description("Prevents adding users if there are this many users in the queue already.")]
         public int MaxQueueCount { get; set; } = 999;
 
+        [Category(FeatureToggle), Description("Allows users to dequeue while being traded.")]
+        public bool CanDequeueIfProcessing { get; set; }
+
         [Category(FeatureToggle), Description("Determines how Flex Mode will process the queues.")]
         public FlexYieldMode FlexMode { get; set; } = FlexYieldMode.Weighted;
 
@@ -74,27 +77,21 @@ namespace SysBot.Pokemon
         [Category(TimeBias), Description("Multiplies the amount of users in queue to give an estimate of how much time it will take until the user is processed.")]
         public float EstimatedDelayFactor { get; set; } = 1.1f;
 
-        private int GetCountBias(PokeTradeType type)
+        private int GetCountBias(PokeTradeType type) => type switch
         {
-            return type switch
-            {
-                PokeTradeType.Seed => YieldMultCountSeedCheck,
-                PokeTradeType.Clone => YieldMultCountClone,
-                PokeTradeType.Dump => YieldMultCountDump,
-                _ => YieldMultCountTrade
-            };
-        }
+            PokeTradeType.Seed => YieldMultCountSeedCheck,
+            PokeTradeType.Clone => YieldMultCountClone,
+            PokeTradeType.Dump => YieldMultCountDump,
+            _ => YieldMultCountTrade,
+        };
 
-        private int GetTimeBias(PokeTradeType type)
+        private int GetTimeBias(PokeTradeType type) => type switch
         {
-            return type switch
-            {
-                PokeTradeType.Seed => YieldMultWaitSeedCheck,
-                PokeTradeType.Clone => YieldMultWaitClone,
-                PokeTradeType.Dump => YieldMultWaitDump,
-                _ => YieldMultWaitTrade
-            };
-        }
+            PokeTradeType.Seed => YieldMultWaitSeedCheck,
+            PokeTradeType.Clone => YieldMultWaitClone,
+            PokeTradeType.Dump => YieldMultWaitDump,
+            _ => YieldMultWaitTrade,
+        };
 
         /// <summary>
         /// Gets the weight of a <see cref="PokeTradeType"/> based on the count of users in the queue and time users have waited.
@@ -111,9 +108,11 @@ namespace SysBot.Pokemon
             var cb = GetCountBias(type) * count;
             var tb = GetTimeBias(type) * seconds;
 
-            if (YieldMultWait == FlexBiasMode.Multiply)
-                return cb * tb;
-            return cb + tb;
+            return YieldMultWait switch
+            {
+                FlexBiasMode.Multiply => cb * tb,
+                _ => cb + tb,
+            };
         }
 
         /// <summary>

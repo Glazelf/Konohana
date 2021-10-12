@@ -6,7 +6,11 @@ using System.Linq;
 
 namespace SysBot.Pokemon
 {
-    public class TradeQueueInfo<T> where T : PKM, new()
+    /// <summary>
+    /// Contains a queue of users to be processed.
+    /// </summary>
+    /// <typeparam name="T">Type of data to be transmitted to the users</typeparam>
+    public sealed record TradeQueueInfo<T> where T : PKM, new()
     {
         private readonly object _sync = new();
         private readonly List<TradeEntry<T>> UsersInQueue = new();
@@ -17,7 +21,7 @@ namespace SysBot.Pokemon
         public int Count => UsersInQueue.Count;
 
         public bool ToggleQueue() => Hub.Config.Queues.CanQueue ^= true;
-        public bool GetCanQueue() => Hub.Config.Queues.CanQueue && UsersInQueue.Count < Hub.Config.Queues.MaxQueueCount;
+        public bool GetCanQueue() => Hub.Config.Queues.CanQueue && UsersInQueue.Count < Hub.Config.Queues.MaxQueueCount && Hub.TradeBotsReady;
 
         public TradeEntry<T>? GetDetail(ulong uid) => UsersInQueue.Find(z => z.UserID == uid);
 
@@ -91,9 +95,17 @@ namespace SysBot.Pokemon
             if (removedCount == details.Count)
                 return QueueResultRemove.Removed;
 
+            bool canRemoveWhileProcessing = Hub.Config.Queues.CanDequeueIfProcessing;
             foreach (var detail in details)
+            {
+                if (detail.Trade.IsProcessing && !canRemoveWhileProcessing)
+                    continue;
                 Remove(detail);
-            return QueueResultRemove.CurrentlyProcessing;
+            }
+
+            return canRemoveWhileProcessing
+                ? QueueResultRemove.CurrentlyProcessingRemoved
+                : QueueResultRemove.CurrentlyProcessing;
         }
 
         public int ClearTrade(IEnumerable<TradeEntry<T>> details, PokeTradeHub<T> hub)
@@ -104,6 +116,8 @@ namespace SysBot.Pokemon
                 var queues = hub.Queues.AllQueues;
                 foreach (var detail in details)
                 {
+                    if (detail.Trade.IsProcessing && !Hub.Config.Queues.CanDequeueIfProcessing)
+                        continue;
                     foreach (var queue in queues)
                     {
                         int removed = queue.Remove(detail.Trade);
@@ -149,7 +163,7 @@ namespace SysBot.Pokemon
                 if (Hub.Config.Legality.ResetHOMETracker && trade.Trade.TradeData is IHomeTrack t)
                     t.Tracker = 0;
 
-                var priority = sudo ? PokeTradeQueue<PK8>.Tier1 : PokeTradeQueue<PK8>.TierFree;
+                var priority = sudo ? PokeTradePriorities.Tier1 : PokeTradePriorities.TierFree;
                 var queue = Hub.Queues.GetQueue(trade.Type);
 
                 queue.Enqueue(trade.Trade, priority);

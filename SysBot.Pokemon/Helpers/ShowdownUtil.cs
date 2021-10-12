@@ -17,10 +17,10 @@ namespace SysBot.Pokemon
             var nickIndex = setstring.LastIndexOf(')');
             if (nickIndex > -1)
             {
-                restorenick = setstring.Substring(0, nickIndex + 1);
+                restorenick = setstring[..(nickIndex + 1)];
                 if (restorenick.TrimStart().StartsWith("("))
                     return null;
-                setstring = setstring.Substring(nickIndex + 1);
+                setstring = setstring[(nickIndex + 1)..];
             }
 
             foreach (string i in splittables)
@@ -41,7 +41,7 @@ namespace SysBot.Pokemon
             "Careful Nature", "Docile Nature", "Gentle Nature", "Hardy Nature", "Hasty Nature",
             "Impish Nature", "Jolly Nature", "Lax Nature", "Lonely Nature", "Mild Nature",
             "Modest Nature", "Naive Nature", "Naughty Nature", "Quiet Nature", "Quirky Nature",
-            "Rash Nature", "Relaxed Nature", "Sassy Nature", "Serious Nature", "Timid Nature"
+            "Rash Nature", "Relaxed Nature", "Sassy Nature", "Serious Nature", "Timid Nature",
         };
     }
 }

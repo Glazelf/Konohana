@@ -10,15 +10,15 @@ using YouTube.Base.Clients;
 
 namespace SysBot.Pokemon.YouTube
 {
-    public class YouTubeBot
+    public class YouTubeBot<T> where T : PKM, new()
     {
         private ChatClient client;
         private readonly YouTubeSettings Settings;
 
-        private readonly PokeTradeHub<PK8> Hub;
-        private TradeQueueInfo<PK8> Info => Hub.Queues.Info;
+        private readonly PokeTradeHub<T> Hub;
+        private TradeQueueInfo<T> Info => Hub.Queues.Info;
 
-        public YouTubeBot(YouTubeSettings settings, PokeTradeHub<PK8> hub)
+        public YouTubeBot(YouTubeSettings settings, PokeTradeHub<T> hub)
         {
             Hub = hub;
             Settings = settings;
@@ -48,7 +48,7 @@ namespace SysBot.Pokemon.YouTube
                 catch (Exception ex)
 #pragma warning restore CA1031 // Do not catch general exception types
                 {
-                    LogUtil.LogError(ex.Message, nameof(YouTubeBot));
+                    LogUtil.LogError(ex.Message, nameof(YouTubeBot<T>));
                 }
             });
         }
@@ -82,19 +82,19 @@ namespace SysBot.Pokemon.YouTube
 
             return cmd switch
             {
-                "pr" => (Info.Hub.Ledy.Pool.Reload()
+                "pr" => (Info.Hub.Ledy.Pool.Reload(Hub.Config.Folder.DistributeFolder)
                     ? $"Reloaded from folder. Pool count: {Info.Hub.Ledy.Pool.Count}"
                     : "Failed to reload from folder."),
 
                 "pc" => $"The pool count is: {Info.Hub.Ledy.Pool.Count}",
 
-                _ => string.Empty
+                _ => string.Empty,
             };
         }
 
-        private void Logger_LogOccurred(object sender, Log e)
+        private static void Logger_LogOccurred(object sender, Log e)
         {
-            LogUtil.LogError(e.Message, nameof(YouTubeBot));
+            LogUtil.LogError(e.Message, nameof(YouTubeBot<T>));
         }
 
         private void Client_OnMessagesReceived(object sender, IEnumerable<LiveChatMessage> messages)
@@ -108,8 +108,8 @@ namespace SysBot.Pokemon.YouTube
                     if (space < 0)
                         return;
 
-                    var cmd = msg.Substring(0, space + 1);
-                    var args = msg.Substring(space + 1);
+                    var cmd = msg[..(space + 1)];
+                    var args = msg[(space + 1)..];
 
                     var response = HandleCommand(message, cmd, args);
                     if (response.Length == 0)
@@ -117,7 +117,10 @@ namespace SysBot.Pokemon.YouTube
                     client.SendMessage(response);
                 }
 #pragma warning disable CA1031 // Do not catch general exception types
-                catch { }
+                catch
+                {
+                    // ignored
+                }
 #pragma warning restore CA1031 // Do not catch general exception types
             }
         }

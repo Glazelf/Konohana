@@ -1,26 +1,21 @@
-﻿using System;
-using PKHeX.Core;
-using SysBot.Base;
+﻿using SysBot.Base;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using PKHeX.Core;
 
 namespace SysBot.Pokemon
 {
     public class PokemonPool<T> : List<T> where T : PKM, new()
     {
-        public readonly int ExpectedSize = new T().Data.Length;
+        private readonly int ExpectedSize = new T().Data.Length;
+        private readonly BaseConfig Settings;
+        private bool Randomized => Settings.Shuffled;
 
-        public readonly PokeTradeHubConfig Settings;
-
-        public PokemonPool(PokeTradeHubConfig settings)
-        {
-            Settings = settings;
-        }
-
-        public bool Randomized => Settings.Distribution.Shuffled;
-
+        public readonly Dictionary<string, LedyRequest<T>> Files = new();
         private int Counter;
+
+        public PokemonPool(BaseConfig settings) => Settings = settings;
 
         public T GetRandomPoke()
         {
@@ -33,35 +28,31 @@ namespace SysBot.Pokemon
 
         public T GetRandomSurprise()
         {
-            int ctr = 0;
             while (true)
             {
                 var rand = GetRandomPoke();
-                if (rand is PK8 pk8 && DisallowSurpriseTrade(pk8))
+                if (DisallowRandomRecipientTrade(rand))
                     continue;
-
-                ctr++; // if the pool has no valid matches, yield out eventually
-                if (ctr > Count * 2)
-                    return rand;
+                return rand;
             }
         }
 
-        public bool Reload()
+        public bool Reload(string path, SearchOption opt = SearchOption.AllDirectories)
         {
-            return LoadFolder(Settings.Folder.DistributeFolder);
-        }
-
-        public readonly Dictionary<string, LedyRequest<T>> Files = new();
-
-        public bool LoadFolder(string path)
-        {
+            if (!Directory.Exists(path))
+                return false;
             Clear();
             Files.Clear();
+            return LoadFolder(path, opt);
+        }
+
+        public bool LoadFolder(string path, SearchOption opt = SearchOption.AllDirectories)
+        {
             if (!Directory.Exists(path))
                 return false;
 
             var loadedAny = false;
-            var files = Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories);
+            var files = Directory.EnumerateFiles(path, "*", opt);
             var matchFiles = LoadUtil.GetFilesOfSize(files, ExpectedSize);
 
             int surpriseBlocked = 0;
@@ -76,34 +67,34 @@ namespace SysBot.Pokemon
                 if (pkm is not T dest)
                     continue;
 
-                if (dest.Species == 0 || dest is not PK8 pk8)
+                if (dest.Species == 0)
                 {
-                    LogUtil.LogInfo("SKIPPED: Provided pk8 is not valid: " + dest.FileName, nameof(PokemonPool<T>));
+                    LogUtil.LogInfo("SKIPPED: Provided file is not valid: " + dest.FileName, nameof(PokemonPool<T>));
                     continue;
                 }
 
                 if (!dest.CanBeTraded())
                 {
-                    LogUtil.LogInfo("SKIPPED: Provided pk8 cannot be traded: " + dest.FileName, nameof(PokemonPool<T>));
+                    LogUtil.LogInfo("SKIPPED: Provided file cannot be traded: " + dest.FileName, nameof(PokemonPool<T>));
                     continue;
                 }
 
-                var la = new LegalityAnalysis(pk8);
+                var la = new LegalityAnalysis(dest);
                 if (!la.Valid)
                 {
                     var reason = la.Report();
-                    LogUtil.LogInfo($"SKIPPED: Provided pk8 is not legal: {dest.FileName} -- {reason}", nameof(PokemonPool<T>));
+                    LogUtil.LogInfo($"SKIPPED: Provided file is not legal: {dest.FileName} -- {reason}", nameof(PokemonPool<T>));
                     continue;
                 }
 
-                if (DisallowSurpriseTrade(pk8, la.EncounterMatch))
+                if (DisallowRandomRecipientTrade(dest, la.EncounterMatch))
                 {
-                    LogUtil.LogInfo("Provided pk8 was loaded but can't be Surprise Traded: " + dest.FileName, nameof(PokemonPool<T>));
+                    LogUtil.LogInfo("Provided file was loaded but can't be Surprise Traded: " + dest.FileName, nameof(PokemonPool<T>));
                     surpriseBlocked++;
                 }
 
-                if (Settings.Legality.ResetHOMETracker)
-                    pk8.Tracker = 0;
+                if (Settings.Legality.ResetHOMETracker && dest is IHomeTrack h)
+                    h.Tracker = 0;
 
                 var fn = Path.GetFileNameWithoutExtension(file);
                 fn = StringsUtil.Sanitize(fn);
@@ -116,7 +107,7 @@ namespace SysBot.Pokemon
                 }
                 else
                 {
-                    LogUtil.LogInfo("Provided pk8 was not added due to duplicate name: " + dest.FileName, nameof(PokemonPool<T>));
+                    LogUtil.LogInfo("Provided file was not added due to duplicate name: " + dest.FileName, nameof(PokemonPool<T>));
                 }
                 loadedAny = true;
             }
@@ -135,13 +126,22 @@ namespace SysBot.Pokemon
             return loadedAny;
         }
 
-        private static bool DisallowSurpriseTrade(PKM pk, IEncounterable enc)
+        private static bool DisallowRandomRecipientTrade(T pk, IEncounterTemplate enc)
         {
-            return DisallowSurpriseTrade(pk);
+            // Anti-spam
+            // if (pk.IsNicknamed && enc is not EncounterTrade {IsNicknamed: true} && pk.Nickname.Length > 6)
+                // return true;
+            return DisallowRandomRecipientTrade(pk);
         }
 
-        private static bool DisallowSurpriseTrade(PKM pk)
+        public static bool DisallowRandomRecipientTrade(T pk)
         {
+            // Anti-spam
+            // if (StringsUtil.IsSpammyString(pk.OT_Name))
+                // return true;
+            // if (pk.IsNicknamed && StringsUtil.IsSpammyString(pk.Nickname))
+                // return true;
+
             // Surprise Trade currently bans Mythicals and Legendaries, not Sub-Legendaries.
             if (Legal.Legends.Contains(pk.Species))
                 return true;
@@ -151,17 +151,6 @@ namespace SysBot.Pokemon
                 return true;
 
             return false;
-        }
-
-        private static bool IsSpammyString(string name)
-        {
-            if (name.IndexOf('.') >= 0 || name.IndexOf('\\') >= 0 || name.IndexOf('/') >= 0)
-                return true;
-
-            if (name.Length <= 6)
-                return false;
-
-            return name.IndexOf("pkm", StringComparison.OrdinalIgnoreCase) >= 0;
         }
     }
 }
