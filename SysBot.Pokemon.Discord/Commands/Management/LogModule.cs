@@ -24,7 +24,7 @@ namespace SysBot.Pokemon.Discord
         {
             foreach (var ch in settings.LoggingChannels)
             {
-                if (discord.GetChannel(ch.ID) is ISocketMessageChannel c)
+                if (discord.GetChannel(ch.ID) is SocketTextChannel c)
                     AddLogChannel(c, ch.ID);
             }
 
@@ -44,14 +44,14 @@ namespace SysBot.Pokemon.Discord
                 return;
             }
 
-            AddLogChannel(c, cid);
+            AddLogChannel((SocketTextChannel)c, cid);
 
             // Add to discord global loggers (saves on program close)
             SysCordSettings.Settings.LoggingChannels.AddIfNew(new[] { GetReference(Context.Channel) });
             await ReplyAsync("Added logging output to this channel!").ConfigureAwait(false);
         }
 
-        private static void AddLogChannel(ISocketMessageChannel c, ulong cid)
+        private static void AddLogChannel(SocketTextChannel c, ulong cid)
         {
             void Logger(string msg, string identity)
             {
