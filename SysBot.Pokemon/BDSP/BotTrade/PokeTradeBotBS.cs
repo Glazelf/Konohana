@@ -2,6 +2,7 @@
 using PKHeX.Core.Searching;
 using SysBot.Base;
 using System;
+using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
@@ -229,7 +230,7 @@ namespace SysBot.Pokemon
             Hub.Config.Stream.EndEnterCode(this);
 
             if (await CheckIfSoftBanned(SoftBanOffset, token).ConfigureAwait(false))
-                await Unban(token).ConfigureAwait(false);
+                await UnSoftBan(token).ConfigureAwait(false);
 
             var toSend = poke.TradeData;
             if (toSend.Species != 0)
@@ -390,7 +391,8 @@ namespace SysBot.Pokemon
                 await Click(A, 1_000, token).ConfigureAwait(false);
                 tradeCounter++;
 
-                if (await SwitchConnection.ReadBytesAbsoluteAsync(BoxStartOffset, 8, token).ConfigureAwait(false) != oldEC)
+                var newEC = await SwitchConnection.ReadBytesAbsoluteAsync(BoxStartOffset, 8, token).ConfigureAwait(false);
+                if (newEC.SequenceEqual(oldEC))
                 {
                     await Task.Delay(5_000, token).ConfigureAwait(false);
                     return PokeTradeResult.Success;
