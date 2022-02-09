@@ -54,7 +54,6 @@ namespace SysBot.Pokemon
         private ulong TradePartnerNIDOffset;
 
         // Cached offsets that stay the same per trade.
-        private ulong TradePartnerNameOffset;
         private ulong TradePartnerOfferedOffset;
 
         public override async Task MainLoop(CancellationToken token)
@@ -70,9 +69,7 @@ namespace SysBot.Pokemon
                 Log($"Starting main {nameof(PokeTradeBotLA)} loop.");
                 await InnerLoop(sav, token).ConfigureAwait(false);
             }
-#pragma warning disable CA1031 // Do not catch general exception types
             catch (Exception e)
-#pragma warning restore CA1031 // Do not catch general exception types
             {
                 Log(e.Message);
             }
@@ -189,9 +186,7 @@ namespace SysBot.Pokemon
                 HandleAbortedTrade(detail, type, priority, result);
                 throw; // let this interrupt the trade loop. re-entering the trade loop will recheck the connection.
             }
-#pragma warning disable CA1031 // Do not catch general exception types
             catch (Exception e)
-#pragma warning restore CA1031 // Do not catch general exception types
             {
                 Log(e.Message);
                 result = PokeTradeResult.ExceptionInternal;
@@ -260,11 +255,6 @@ namespace SysBot.Pokemon
             WaitAtBarrierIfApplicable(token);
             await Click(PLUS, 1_000, token).ConfigureAwait(false);
 
-            Hub.Config.Stream.EndEnterCode(this);
-
-            // Pointer becomes viable after initializing a trade.
-            TradePartnerNameOffset = await SwitchConnection.PointerAll(Offsets.LinkTradePartnerNamePointer, token).ConfigureAwait(false);
-
             poke.TradeSearching(this);
 
             // Wait for a Trainer...
@@ -277,6 +267,8 @@ namespace SysBot.Pokemon
                 await ExitTrade(false, token).ConfigureAwait(false);
                 return PokeTradeResult.NoTrainerFound;
             }
+
+            Hub.Config.Stream.EndEnterCode(this);
 
             var tradePartner = await GetTradePartnerInfo(token).ConfigureAwait(false);
             var trainerNID = await GetTradePartnerNID(TradePartnerNIDOffset, token).ConfigureAwait(false);
@@ -291,6 +283,8 @@ namespace SysBot.Pokemon
             }
 
             poke.SendNotification(this, $"Found Link Trade partner: {tradePartner.TrainerName}. Waiting for a Pokémon...");
+
+            await Task.Delay(2_000, token).ConfigureAwait(false);
 
             if (poke.Type == PokeTradeType.Dump)
             {
@@ -310,7 +304,7 @@ namespace SysBot.Pokemon
             Log("Checking offered Pokémon.");
             // If we got to here, we can read their offered Pokémon.
             var offered = await ReadPokemonPointer(Offsets.LinkTradePartnerPokemonPointer, BoxFormatSlotSize, token).ConfigureAwait(false);
-            if (offered is null)
+            if (offered.Species <= 0 || !offered.ChecksumValid)
             {
                 await ExitTrade(false, token).ConfigureAwait(false);
                 return PokeTradeResult.TrainerTooSlow;
@@ -433,7 +427,7 @@ namespace SysBot.Pokemon
         protected virtual async Task<bool> WaitForTradePartner(CancellationToken token)
         {
             Log("Waiting for trainer...");
-            int ctr = Hub.Config.Trade.TradeWaitTime * 1_000 - 2_000;
+            int ctr = (Hub.Config.Trade.TradeWaitTime * 1_000) - 2_000;
             await Task.Delay(2_000, token).ConfigureAwait(false);
             while (ctr > 0)
             {
@@ -594,7 +588,6 @@ namespace SysBot.Pokemon
 
             poke.SendNotification(this, $"**Cloned your {(Species)clone.Species}!**\nNow press B to cancel your offer and trade me a Pokémon you don't want.");
             Log($"Cloned a {(Species)clone.Species}. Waiting for user to change their Pokémon...");
-
 
             if (!await CheckCloneChangedOffer(token).ConfigureAwait(false))
             {
@@ -791,7 +784,7 @@ namespace SysBot.Pokemon
             return PokeTradeResult.Success;
         }
 
-        private RemoteControlAccess GetReference(string name, ulong id, string comment) => new()
+        private static RemoteControlAccess GetReference(string name, ulong id, string comment) => new()
         {
             ID = id,
             Name = name,
