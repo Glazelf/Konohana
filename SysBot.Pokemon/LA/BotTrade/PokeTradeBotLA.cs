@@ -125,6 +125,7 @@ namespace SysBot.Pokemon
         {
             var type = Config.CurrentRoutineType;
             int waitCounter = 0;
+            await SetCurrentBox(0, token).ConfigureAwait(false);
             while (!token.IsCancellationRequested && Config.NextRoutineType == type)
             {
                 var (detail, priority) = GetTradeData(type);
@@ -270,6 +271,9 @@ namespace SysBot.Pokemon
 
             Hub.Config.Stream.EndEnterCode(this);
 
+            // Some more time to fully enter the trade.
+            await Task.Delay(1_000, token).ConfigureAwait(false);
+
             var tradePartner = await GetTradePartnerInfo(token).ConfigureAwait(false);
             var trainerNID = await GetTradePartnerNID(TradePartnerNIDOffset, token).ConfigureAwait(false);
             RecordUtil<PokeTradeBot>.Record($"Initiating\t{trainerNID:X16}\t{tradePartner.TrainerName}\t{poke.Trainer.TrainerName}\t{poke.Trainer.ID}\t{poke.ID}\t{toSend.EncryptionConstant:X8}");
@@ -283,8 +287,6 @@ namespace SysBot.Pokemon
             }
 
             poke.SendNotification(this, $"Found Link Trade partner: {tradePartner.TrainerName}. Waiting for a Pokémon...");
-
-            await Task.Delay(2_000, token).ConfigureAwait(false);
 
             if (poke.Type == PokeTradeType.Dump)
             {
@@ -303,14 +305,10 @@ namespace SysBot.Pokemon
 
             Log("Checking offered Pokémon.");
             // If we got to here, we can read their offered Pokémon.
-            var offered = await ReadPokemonPointer(Offsets.LinkTradePartnerPokemonPointer, BoxFormatSlotSize, token).ConfigureAwait(false);
-            if (offered.Species <= 0 || !offered.ChecksumValid)
-            {
-                await ExitTrade(false, token).ConfigureAwait(false);
-                return PokeTradeResult.TrainerTooSlow;
-            }
 
-            if (offered.Species < 1 || !offered.ChecksumValid)
+            // Wait for user input... Needs to be different from the previously offered Pokémon.
+            var offered = await ReadUntilPresentPointer(Offsets.LinkTradePartnerPokemonPointer, 3_000, 0_050, BoxFormatSlotSize, token).ConfigureAwait(false);
+            if (offered == null || offered.Species < 1 || !offered.ChecksumValid)
             {
                 Log("Trade ended because trainer offer was rescinded too quickly.");
                 await ExitTrade(false, token).ConfigureAwait(false);
@@ -450,9 +448,10 @@ namespace SysBot.Pokemon
             if (unexpected)
                 Log("Unexpected behavior, recovering position.");
 
+            int ctr = 120_000;
             while (!await IsOnOverworld(OverworldOffset, token).ConfigureAwait(false))
             {
-                if (await CheckIfSoftBanned(SoftBanOffset, token).ConfigureAwait(false))
+                if (ctr < 0)
                 {
                     await RestartGameLA(token).ConfigureAwait(false);
                     return;
@@ -470,6 +469,8 @@ namespace SysBot.Pokemon
                 await Click(B, 1_000, token).ConfigureAwait(false);
                 if (await IsOnOverworld(OverworldOffset, token).ConfigureAwait(false))
                     return;
+
+                ctr -= 3_000;
             }
         }
 
