@@ -36,6 +36,9 @@ namespace SysBot.Pokemon
             Legalizer.EnableEasterEggs = cfg.EnableEasterEggs;
             APILegality.AllowTrainerOverride = cfg.AllowTrainerDataOverride;
             APILegality.AllowBatchCommands = cfg.AllowBatchCommands;
+            APILegality.PrioritizeGame = cfg.PrioritizeGame;
+            APILegality.PrioritizeGameVersion= cfg.PrioritizeGameVersion;
+            APILegality.SetBattleVersion = cfg.SetBattleVersion;
             APILegality.Timeout = cfg.Timeout;
         }
 
@@ -68,9 +71,6 @@ namespace SysBot.Pokemon
                         TrainerSettings.Register(fallback);
                 }
             }
-
-            var trainer = TrainerSettings.GetSavedTrainerData(PKX.Generation);
-            RecentTrainerCache.SetRecentTrainer(trainer);
         }
 
         private static void InitializeCoreStrings()
