@@ -163,11 +163,7 @@ namespace SysBot.Pokemon
                 Log("Nothing to check, waiting for new users...");
             }
 
-            const int interval = 10;
-            if (waitCounter % interval == interval - 1 && Hub.Config.AntiIdle)
-                await Click(B, 1_000, token).ConfigureAwait(false);
-            else
-                await Task.Delay(1_000, token).ConfigureAwait(false);
+            await Task.Delay(1_000, token).ConfigureAwait(false);
         }
 
         protected virtual (PokeTradeDetail<PK9>? detail, uint priority) GetTradeData(PokeRoutineType type)
@@ -298,8 +294,17 @@ namespace SysBot.Pokemon
             Hub.Config.Stream.EndEnterCode(this);
 
             // Wait until we get into the box.
+            var cnt = 0;
             while (!await IsInBox(PortalOffset, token).ConfigureAwait(false))
+            {
                 await Task.Delay(0_500, token).ConfigureAwait(false);
+                if (++cnt > 20) // Didn't make it in after 10 seconds.
+                {
+                    await Click(A, 1_000, token).ConfigureAwait(false); // Ensures we dismiss a popup.
+                    await RecoverToPortal(token).ConfigureAwait(false);
+                    return PokeTradeResult.RecoverOpenBox;
+                }
+            }
             await Task.Delay(2_000, token).ConfigureAwait(false);
 
             var tradePartner = await GetTradePartnerInfo(token).ConfigureAwait(false);
@@ -310,6 +315,7 @@ namespace SysBot.Pokemon
             var partnerCheck = CheckPartnerReputation(poke, trainerNID, tradePartner.TrainerName);
             if (partnerCheck != PokeTradeResult.Success)
             {
+                await Click(A, 1_000, token).ConfigureAwait(false); // Ensures we dismiss a popup.
                 await ExitTradeToPortal(false, token).ConfigureAwait(false);
                 return partnerCheck;
             }
