@@ -95,7 +95,8 @@ namespace SysBot.Pokemon
                 }
                 catch (SocketException e)
                 {
-                    Connection.LogError(e.StackTrace);
+                    if (e.StackTrace != null)
+                        Connection.LogError(e.StackTrace);
                     var attempts = Hub.Config.Timings.ReconnectAttempts;
                     var delay = Hub.Config.Timings.ExtraReconnectDelay;
                     var protocol = Config.Connection.Protocol;
@@ -606,7 +607,7 @@ namespace SysBot.Pokemon
                 return (offered, PokeTradeResult.IllegalTrade);
             }
 
-            var clone = (PK8)offered.Clone();
+            var clone = offered.Clone();
             if (Hub.Config.Legality.ResetHOMETracker)
                 clone.Tracker = 0;
 
