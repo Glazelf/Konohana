@@ -1,4 +1,4 @@
-﻿using PKHeX.Core;
+using PKHeX.Core;
 using SysBot.Base;
 using System.IO;
 using System.Threading;
@@ -24,23 +24,16 @@ public interface IPokeBotRunner
     bool SupportsRoutine(PokeRoutineType pokeRoutineType);
 }
 
-public abstract class PokeBotRunner<T> : BotRunner<PokeBotState>, IPokeBotRunner where T : PKM, new()
+public abstract class PokeBotRunner<T>(PokeTradeHub<T> hub, BotFactory<T> Factory)
+    : BotRunner<PokeBotState>, IPokeBotRunner
+    where T : PKM, new()
 {
-    public readonly PokeTradeHub<T> Hub;
-    private readonly BotFactory<T> Factory;
+    public PokeTradeHub<T> Hub => hub;
 
     public PokeTradeHubConfig Config => Hub.Config;
 
-    protected PokeBotRunner(PokeTradeHub<T> hub, BotFactory<T> factory)
+    protected PokeBotRunner(PokeTradeHubConfig config, BotFactory<T> factory) : this(new PokeTradeHub<T>(config), factory)
     {
-        Hub = hub;
-        Factory = factory;
-    }
-
-    protected PokeBotRunner(PokeTradeHubConfig config, BotFactory<T> factory)
-    {
-        Factory = factory;
-        Hub = new PokeTradeHub<T>(config);
     }
 
     protected virtual void AddIntegrations() { }
@@ -111,6 +104,10 @@ public abstract class PokeBotRunner<T> : BotRunner<PokeBotState>, IPokeBotRunner
         var path = Hub.Config.Folder.DistributeFolder;
         if (!Directory.Exists(path))
             LogUtil.LogError("The distribution folder was not found. Please verify that it exists!", "Hub");
+
+        path = Hub.Config.Folder.DumpFolder;
+        if (Hub.Config.Folder.Dump && !Directory.Exists(path))
+            LogUtil.LogError("The program is configured to dump files, but the dump folder was not found. Please verify that it exists!", "Hub");
 
         var pool = Hub.Ledy.Pool;
         if (!pool.Reload(Hub.Config.Folder.DistributeFolder))

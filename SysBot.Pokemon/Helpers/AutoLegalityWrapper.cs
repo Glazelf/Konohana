@@ -1,9 +1,9 @@
 using PKHeX.Core;
 using PKHeX.Core.AutoMod;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading;
 
 namespace SysBot.Pokemon;
 
@@ -21,7 +21,6 @@ public static class AutoLegalityWrapper
 
     private static void InitializeAutoLegality(LegalitySettings cfg)
     {
-        InitializeCoreStrings();
         EncounterEvent.RefreshMGDB(cfg.MGDBPath);
         InitializeTrainerDatabase(cfg);
         InitializeSettings(cfg);
@@ -39,8 +38,8 @@ public static class AutoLegalityWrapper
         Legalizer.EnableEasterEggs = cfg.EnableEasterEggs;
         APILegality.AllowTrainerOverride = cfg.AllowTrainerDataOverride;
         APILegality.AllowBatchCommands = cfg.AllowBatchCommands;
-        APILegality.PrioritizeGame = cfg.PrioritizeGame;
-        APILegality.PrioritizeGameVersion = cfg.PrioritizeGameVersion;
+        APILegality.GameVersionPriority = cfg.GameVersionPriority;
+        cfg.PriorityOrder = APILegality.PriorityOrder = SanitizePriorityOrder(cfg.PriorityOrder); // Clean this up because user can add duplicate or invalid entries.
         APILegality.SetBattleVersion = cfg.SetBattleVersion;
         APILegality.Timeout = cfg.Timeout;
 
@@ -48,19 +47,30 @@ public static class AutoLegalityWrapper
 
         // As of February 2024, the default setting in PKHeX is Invalid for missing HOME trackers.
         // If the host wants to allow missing HOME trackers, we need to override the default setting.
-        bool allowMissingHOME = !cfg.EnableHOMETrackerCheck;
-        APILegality.AllowHOMETransferGeneration = allowMissingHOME;
-        if (allowMissingHOME)
+        if (!cfg.EnableHOMETrackerCheck)
             settings.HOMETransfer.HOMETransferTrackerNotPresent = Severity.Fishy;
 
         settings.Handler.CheckActiveHandler = false;
-        settings.Nickname.Disable();
 
         // We need all the encounter types present, so add the missing ones at the end.
         var missing = EncounterPriority.Except(cfg.PrioritizeEncounters);
         cfg.PrioritizeEncounters.AddRange(missing);
         cfg.PrioritizeEncounters = cfg.PrioritizeEncounters.Distinct().ToList(); // Don't allow duplicates.
         EncounterMovesetGenerator.PriorityList = cfg.PrioritizeEncounters;
+    }
+
+    private static List<GameVersion> SanitizePriorityOrder(List<GameVersion> versionList)
+    {
+        var validVersions = Enum.GetValues<GameVersion>().Where(GameUtil.IsValidSavedVersion).Reverse().ToList();
+
+        foreach (var ver in validVersions)
+        {
+            if (!versionList.Contains(ver))
+                versionList.Add(ver); // Add any missing versions.
+        }
+
+        // Remove any versions in versionList that are not in validVersions and clean up duplicates in the process.
+        return [.. versionList.Intersect(validVersions)];
     }
 
     private static void InitializeTrainerDatabase(LegalitySettings cfg)
@@ -71,15 +81,12 @@ public static class AutoLegalityWrapper
 
         // Seed the Trainer Database with enough fake save files so that we return a generation sensitive format when needed.
         var fallback = GetDefaultTrainer(cfg);
-        for (byte generation = 1; generation <= PKX.Generation; generation++)
+        for (byte generation = 1; generation <= Latest.Generation; generation++)
         {
-            var versions = GameUtil.GetVersionsInGeneration(generation, PKX.Version);
+            var versions = GameUtil.GetVersionsInGeneration(generation, Latest.Version);
             foreach (var version in versions)
                 RegisterIfNoneExist(fallback, generation, version);
         }
-        // Manually register for LGP/E since Gen7 above will only register the 3DS versions.
-        RegisterIfNoneExist(fallback, 7, GameVersion.GP);
-        RegisterIfNoneExist(fallback, 7, GameVersion.GE);
     }
 
     private static SimpleTrainerInfo GetDefaultTrainer(LegalitySettings cfg)
@@ -108,27 +115,29 @@ public static class AutoLegalityWrapper
             OT = fallback.OT,
             Generation = generation,
         };
-        var exist = TrainerSettings.GetSavedTrainerData(version, generation, fallback);
+        var exist = TrainerSettings.GetSavedTrainerData(generation, version, fallback);
         if (exist is SimpleTrainerInfo) // not anything from files; this assumes ALM returns SimpleTrainerInfo for non-user-provided fake templates.
             TrainerSettings.Register(fallback);
     }
 
-    private static void InitializeCoreStrings()
+    public static bool CanBeTraded(this PKM pk)
     {
-        var lang = Thread.CurrentThread.CurrentCulture.TwoLetterISOLanguageName[..2];
-        LocalizationUtil.SetLocalization(typeof(LegalityCheckStrings), lang);
-        LocalizationUtil.SetLocalization(typeof(MessageStrings), lang);
-        RibbonStrings.ResetDictionary(GameInfo.Strings.ribbons);
-        ParseSettings.ChangeLocalizationStrings(GameInfo.Strings.movelist, GameInfo.Strings.specieslist);
-    }
-
-    public static bool CanBeTraded(this PKM pkm)
-    {
-        if (pkm.IsNicknamed && StringsUtil.IsSpammyString(pkm.Nickname))
-            return false;
-        if (StringsUtil.IsSpammyString(pkm.OriginalTrainerName) && !IsFixedOT(new LegalityAnalysis(pkm).EncounterOriginal, pkm))
-            return false;
-        return !FormInfo.IsFusedForm(pkm.Species, pkm.Form, pkm.Format);
+        if (pk.IsNicknamed)
+        {
+            Span<char> nick = stackalloc char[pk.TrashCharCountNickname];
+            int len = pk.LoadString(pk.NicknameTrash, nick);
+            nick = nick[..len];
+            if (StringsUtil.IsSpammyString(nick))
+                return false;
+        }
+        {
+            Span<char> ot = stackalloc char[pk.TrashCharCountTrainer];
+            int len = pk.LoadString(pk.OriginalTrainerTrash, ot);
+            ot = ot[..len];
+            if (StringsUtil.IsSpammyString(ot) && !IsFixedOT(new LegalityAnalysis(pk).EncounterOriginal, pk))
+                return false;
+        }
+        return !FormInfo.IsFusedForm(pk.Species, pk.Form, pk.Format);
     }
 
     public static bool IsFixedOT(IEncounterTemplate t, PKM pkm) => t switch
@@ -150,13 +159,13 @@ public static class AutoLegalityWrapper
     public static ITrainerInfo GetTrainerInfo<T>() where T : PKM, new()
     {
         if (typeof(T) == typeof(PK8))
-            return TrainerSettings.GetSavedTrainerData(GameVersion.SWSH, 8);
+            return TrainerSettings.GetSavedTrainerData(GameVersion.SWSH);
         if (typeof(T) == typeof(PB8))
-            return TrainerSettings.GetSavedTrainerData(GameVersion.BDSP, 8);
+            return TrainerSettings.GetSavedTrainerData(GameVersion.BDSP);
         if (typeof(T) == typeof(PA8))
-            return TrainerSettings.GetSavedTrainerData(GameVersion.PLA, 8);
+            return TrainerSettings.GetSavedTrainerData(GameVersion.PLA);
         if (typeof(T) == typeof(PK9))
-            return TrainerSettings.GetSavedTrainerData(GameVersion.SV, 9);
+            return TrainerSettings.GetSavedTrainerData(GameVersion.SV);
 
         throw new ArgumentException("Type does not have a recognized trainer fetch.", typeof(T).Name);
     }
